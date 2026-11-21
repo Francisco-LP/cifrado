@@ -2,3 +2,4 @@ cifrado
 *.enc
 *.o
 build/
+build-cmake/
