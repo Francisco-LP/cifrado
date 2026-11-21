@@ -1,3 +1,4 @@
 cifrado
 *.enc
 *.o
+build/

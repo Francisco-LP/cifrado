@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cifrado
+GenericName=Cifrado de archivos
+Comment=Cifra y descifra archivos y carpetas con AES-256-GCM
+Exec=cifrado-gui %F
+Icon=security-high
+Terminal=false
+Categories=Utility;Security;Qt;
+Keywords=encrypt;decrypt;cifrar;descifrar;aes;
