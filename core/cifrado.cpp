@@ -192,6 +192,12 @@ bool outputBlocked(const fs::path &out, bool overwrite) {
   return !overwrite && fs::exists(fs::symlink_status(out, ec));
 }
 
+uintmax_t sizeOrZero(const fs::path &p) {
+  std::error_code ec;
+  uintmax_t n = fs::file_size(p, ec);
+  return ec ? 0 : n;
+}
+
 void enableArgonThreads() {
   static bool done = [] {
     OSSL_set_max_threads(nullptr, 4);
@@ -268,7 +274,8 @@ Plan planFiles(const std::vector<fs::path> &targets, Mode mode) {
                                    : "no tiene extensión .enc");
         continue;
       }
-      plan.jobs.push_back({t, outputPathFor(t, mode)});
+      plan.jobs.push_back({t, outputPathFor(t, mode), sizeOrZero(t)});
+      plan.totalBytes += plan.jobs.back().size;
       continue;
     }
     if (!fs::is_directory(st)) {
@@ -278,7 +285,7 @@ Plan planFiles(const std::vector<fs::path> &targets, Mode mode) {
 
     // Se recolecta todo antes de modificar nada: crear/borrar archivos
     // mientras se recorre la carpeta tiene comportamiento no especificado.
-    std::vector<fs::path> found;
+    std::vector<std::pair<fs::path, uintmax_t>> found;
     fs::recursive_directory_iterator it(
         t, fs::directory_options::skip_permission_denied, ec);
     if (ec) {
@@ -295,13 +302,15 @@ Plan planFiles(const std::vector<fs::path> &targets, Mode mode) {
         continue;
       if (isTemp(e.path()) || !wanted(e.path()))
         continue;
-      found.push_back(e.path());
+      found.emplace_back(e.path(), sizeOrZero(e.path()));
     }
     if (ec)
       skip(t, Status::ReadError, "no se pudo recorrer completa: " + ec.message());
     std::sort(found.begin(), found.end());
-    for (auto &p : found)
-      plan.jobs.push_back({p, outputPathFor(p, mode)});
+    for (auto &[p, size] : found) {
+      plan.jobs.push_back({p, outputPathFor(p, mode), size});
+      plan.totalBytes += size;
+    }
   }
   return plan;
 }
@@ -434,6 +443,8 @@ Status Session::encryptFile(const fs::path &in, const fs::path &out,
         return Status::CryptoError;
       if (!tmp.write(enc.data(), size_t(len)))
         return Status::WriteError;
+      if (onBytes)
+        onBytes(uintmax_t(got));
     }
     if (fin.eof())
       break;
@@ -459,7 +470,8 @@ namespace {
 // PBKDF2-SHA256 (el IV era el prefijo de la clave). Sin autenticación.
 Status decryptLegacy(std::ifstream &fin, uintmax_t size,
                      const std::string &password, const fs::path &out,
-                     bool overwrite, const std::atomic<bool> *cancel) {
+                     bool overwrite, const std::atomic<bool> *cancel,
+                     const std::function<void(uintmax_t)> &onBytes) {
   if (size < SALT_SIZE + 16 || (size - SALT_SIZE) % 16 != 0)
     return Status::InvalidFormat;
 
@@ -501,6 +513,8 @@ Status decryptLegacy(std::ifstream &fin, uintmax_t size,
         return Status::CryptoError;
       if (!tmp.write(plain.data(), size_t(len)))
         return Status::WriteError;
+      if (onBytes)
+        onBytes(uintmax_t(got));
     }
     if (fin.eof())
       break;
@@ -535,7 +549,7 @@ Status Session::decryptFile(const fs::path &in, const fs::path &out,
   if (!haveHeader || std::memcmp(header, MAGIC, 4) != 0) {
     if (legacy)
       *legacy = true;
-    return decryptLegacy(fin, size, password_, out, overwrite, cancel);
+    return decryptLegacy(fin, size, password_, out, overwrite, cancel, onBytes);
   }
 
   if (header[4] != FORMAT_VERSION || header[5] != KDF_ARGON2ID)
@@ -583,6 +597,8 @@ Status Session::decryptFile(const fs::path &in, const fs::path &out,
     // Se escribe en el temporal; solo se publica si el tag es válido.
     if (!tmp.write(plain.data(), size_t(len)))
       return Status::WriteError;
+    if (onBytes)
+      onBytes(n);
   }
 
   unsigned char tag[TAG_SIZE];
@@ -600,7 +616,8 @@ Status Session::decryptFile(const fs::path &in, const fs::path &out,
 
 Summary process(const std::vector<fs::path> &targets,
                 const std::string &password, Mode mode, const Options &opts,
-                const ProgressFn &progress, const std::atomic<bool> *cancel) {
+                const ProgressFn &progress, const std::atomic<bool> *cancel,
+                const BytesFn &bytes) {
   Summary sum;
   Plan plan = planFiles(targets, mode);
   const size_t total = plan.jobs.size();
@@ -616,7 +633,16 @@ Summary process(const std::vector<fs::path> &targets,
   }
 
   Session session(password, opts.kdf);
+  const uintmax_t totalBytes = plan.totalBytes;
+  uintmax_t bytesDone = 0;
+  if (bytes) {
+    session.onBytes = [&](uintmax_t n) {
+      bytesDone += n;
+      bytes(std::min(bytesDone, totalBytes), totalBytes);
+    };
+  }
   for (const auto &job : plan.jobs) {
+    const uintmax_t bytesAtStart = bytesDone;
     if (cancelled(cancel)) {
       sum.cancelled = true;
       break;
@@ -647,6 +673,10 @@ Summary process(const std::vector<fs::path> &targets,
     } else {
       ++sum.failed;
     }
+    // El tamaño pudo cambiar desde que se planificó: se ajusta al esperado.
+    bytesDone = bytesAtStart + job.size;
+    if (bytes)
+      bytes(std::min(bytesDone, totalBytes), totalBytes);
     ++done;
     if (progress)
       progress(r, done, total);

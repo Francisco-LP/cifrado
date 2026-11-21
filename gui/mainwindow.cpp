@@ -20,6 +20,10 @@
 #include <QThread>
 #include <QVBoxLayout>
 
+#include <QLocale>
+
+#include <chrono>
+
 #include <openssl/crypto.h>
 
 using cifrado::FileResult;
@@ -280,6 +284,10 @@ void MainWindow::start(Mode mode) {
   mode_ = mode;
   cancelFlag_ = false;
   log_->clear();
+  filesDone_ = 0;
+  filesTotal_ = plan.jobs.size();
+  bytesDone_ = 0;
+  bytesTotal_ = plan.totalBytes;
   log(mode == Mode::Encrypt ? tr("Cifrando %n archivo(s)…", nullptr, int(plan.jobs.size()))
                             : tr("Descifrando %n archivo(s)…", nullptr, int(plan.jobs.size())));
   progress_->setRange(0, 0); // indeterminado mientras se deriva la clave
@@ -295,7 +303,23 @@ void MainWindow::start(Mode mode) {
           this, [this, r, done, total] { onFileDone(r, done, total); },
           Qt::QueuedConnection);
     };
-    Summary s = cifrado::process(targets, password, mode, opts, progress, &cancelFlag_);
+    // Se avisa a la interfaz como mucho cada 50 ms o al cambiar el
+    // porcentaje, para no inundarla de eventos (hay uno cada 64 KiB).
+    int lastPermille = -1;
+    auto lastSent = std::chrono::steady_clock::time_point{};
+    auto bytes = [&, this](uintmax_t done, uintmax_t total) {
+      int permille = total ? int(done * 1000 / total) : 1000;
+      auto now = std::chrono::steady_clock::now();
+      if (permille == lastPermille ||
+          (done < total && now - lastSent < std::chrono::milliseconds(50)))
+        return;
+      lastPermille = permille;
+      lastSent = now;
+      QMetaObject::invokeMethod(
+          this, [this, done, total] { onBytes(done, total); }, Qt::QueuedConnection);
+    };
+    Summary s = cifrado::process(targets, password, mode, opts, progress,
+                                 &cancelFlag_, bytes);
     OPENSSL_cleanse(password.data(), password.size());
     QMetaObject::invokeMethod(this, [this, s] { onFinished(s); }, Qt::QueuedConnection);
   });
@@ -304,10 +328,37 @@ void MainWindow::start(Mode mode) {
   worker_->start();
 }
 
+void MainWindow::onBytes(uintmax_t done, uintmax_t total) {
+  bytesDone_ = done;
+  bytesTotal_ = total;
+  refreshProgressText();
+}
+
+void MainWindow::refreshProgressText() {
+  // La barra va de 0 a 1000 según los bytes procesados; si todos los archivos
+  // están vacíos, se usa el número de archivos.
+  int permille;
+  if (bytesTotal_ > 0)
+    permille = int(bytesDone_ * 1000 / bytesTotal_);
+  else
+    permille = filesTotal_ ? int(filesDone_ * 1000 / filesTotal_) : 0;
+  progress_->setRange(0, 1000);
+  progress_->setValue(permille);
+
+  const QLocale loc;
+  size_t current = std::min(filesDone_ + 1, filesTotal_);
+  progress_->setFormat(tr("%1% — archivo %2 de %3 — %4 / %5")
+                           .arg(permille / 10)
+                           .arg(current)
+                           .arg(filesTotal_)
+                           .arg(loc.formattedDataSize(qint64(bytesDone_)),
+                                loc.formattedDataSize(qint64(bytesTotal_))));
+}
+
 void MainWindow::onFileDone(const FileResult &r, size_t done, size_t total) {
-  progress_->setRange(0, int(total));
-  progress_->setValue(int(done));
-  progress_->setFormat(QStringLiteral("%v / %m"));
+  filesDone_ = done;
+  filesTotal_ = total;
+  refreshProgressText();
 
   switch (r.status) {
   case Status::Ok:

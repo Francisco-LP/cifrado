@@ -33,6 +33,8 @@ private:
   void log(const QString &text, bool error = false);
   void onFileDone(const cifrado::FileResult &r, size_t done, size_t total);
   void onFinished(const cifrado::Summary &s);
+  void onBytes(uintmax_t done, uintmax_t total);
+  void refreshProgressText();
   void updateButtons();
 
   QListWidget *list_;
@@ -52,6 +54,8 @@ private:
   QPlainTextEdit *log_;
 
   cifrado::Mode mode_ = cifrado::Mode::Encrypt;
+  size_t filesDone_ = 0, filesTotal_ = 0;
+  uintmax_t bytesDone_ = 0, bytesTotal_ = 0;
   std::atomic<bool> cancelFlag_{false};
   QThread *worker_ = nullptr;
 };

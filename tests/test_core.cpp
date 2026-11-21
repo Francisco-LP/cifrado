@@ -284,6 +284,26 @@ void testCancel() {
   CHECK(countTempFiles(d.path) == 0);
 }
 
+void testByteProgress() {
+  TempDir d;
+  writeAll(d.path / "a", randomData(150000, 1));
+  writeAll(d.path / "b", randomData(10, 2));
+  writeAll(d.path / "c", "");
+  for (Mode m : {Mode::Encrypt, Mode::Decrypt}) {
+    std::vector<std::pair<uintmax_t, uintmax_t>> calls;
+    Summary s = process({d.path}, "pw", m, fastOpts(), {}, nullptr,
+                        [&](uintmax_t done, uintmax_t total) { calls.push_back({done, total}); });
+    CHECK(s.ok == 3);
+    CHECK(calls.size() > 3); // avanza también dentro del archivo grande
+    bool monotonic = true;
+    for (size_t i = 1; i < calls.size(); ++i)
+      monotonic &= calls[i].first >= calls[i - 1].first;
+    CHECK(monotonic);
+    CHECK(!calls.empty() && calls.back().first == calls.back().second);
+    CHECK(calls.back().second == (m == Mode::Encrypt ? 150010u : 150010u + 3 * 64));
+  }
+}
+
 void testDefaultArgon2() {
   // Comprueba que los parámetros por defecto funcionan en este OpenSSL.
   TempDir d;
@@ -311,6 +331,7 @@ int main() {
       {"carpeta recursiva y enlaces", testFolderProcess},
       {"archivo individual y --keep", testSingleFileAndKeep},
       {"cancelación", testCancel},
+      {"progreso por bytes", testByteProgress},
       {"Argon2id por defecto", testDefaultArgon2},
   };
   for (auto &t : tests) {

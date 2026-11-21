@@ -88,11 +88,13 @@ struct Summary {
 struct Job {
   fs::path source;
   fs::path output;
+  uintmax_t size = 0; // tamaño del archivo de origen en bytes
 };
 
 struct Plan {
   std::vector<Job> jobs;
   std::vector<FileResult> skipped; // rutas que no se procesarán, con el motivo
+  uintmax_t totalBytes = 0;
 };
 
 // Texto legible (en español) para un estado.
@@ -126,6 +128,9 @@ public:
                      const std::atomic<bool> *cancel = nullptr,
                      bool *legacy = nullptr);
 
+  // Se llama tras cada bloque leído con la cantidad de bytes de ese bloque.
+  std::function<void(uintmax_t bytes)> onBytes;
+
 private:
   bool deriveKey(const unsigned char *salt, const KdfParams &p,
                  unsigned char *key);
@@ -141,12 +146,18 @@ private:
 using ProgressFn =
     std::function<void(const FileResult &result, size_t done, size_t total)>;
 
-// Procesa todas las rutas. Llama a `progress` después de cada archivo.
+// Progreso global en bytes (suma de todos los archivos). Se llama a menudo
+// (cada 64 KiB): quien lo reciba debe limitar cuánto actualiza la interfaz.
+using BytesFn = std::function<void(uintmax_t done, uintmax_t total)>;
+
+// Procesa todas las rutas. Llama a `progress` después de cada archivo y a
+// `bytes` a medida que avanza dentro de cada archivo.
 // Si `cancel` pasa a true, se detiene al terminar el bloque actual sin dejar
 // archivos a medias.
 Summary process(const std::vector<fs::path> &targets,
                 const std::string &password, Mode mode, const Options &opts,
                 const ProgressFn &progress = {},
-                const std::atomic<bool> *cancel = nullptr);
+                const std::atomic<bool> *cancel = nullptr,
+                const BytesFn &bytes = {});
 
 } // namespace cifrado

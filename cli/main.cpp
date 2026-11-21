@@ -11,6 +11,8 @@
 #include "cifrado.hpp"
 
 #include <atomic>
+#include <chrono>
+#include <cstdio>
 #include <csignal>
 #include <cstring>
 #include <iostream>
@@ -71,6 +73,19 @@ std::string readPassword(const char *prompt) {
   }
   std::cerr << "\n";
   return pw;
+}
+
+std::string humanSize(uintmax_t n) {
+  const char *units[] = {"B", "KiB", "MiB", "GiB", "TiB"};
+  double v = double(n);
+  int u = 0;
+  while (v >= 1024 && u < 4) {
+    v /= 1024;
+    ++u;
+  }
+  char buf[32];
+  std::snprintf(buf, sizeof buf, u == 0 ? "%.0f %s" : "%.1f %s", v, units[u]);
+  return buf;
 }
 
 void usage(const char *prog, std::ostream &os) {
@@ -186,7 +201,34 @@ int main(int argc, char *argv[]) {
   if (!quiet)
     std::cerr << "Derivando clave (Argon2id)...\n";
 
+  // Barra de progreso en stderr, solo si es una terminal.
+  const bool showBar = !quiet && isatty(STDERR_FILENO);
+  bool barVisible = false;
+  std::chrono::steady_clock::time_point lastDraw{};
+  auto clearBar = [&] {
+    if (barVisible) {
+      std::cerr << "\r\033[K" << std::flush;
+      barVisible = false;
+    }
+  };
+  auto bytesFn = [&](uintmax_t done, uintmax_t total) {
+    if (!showBar)
+      return;
+    auto now = std::chrono::steady_clock::now();
+    if (done < total && now - lastDraw < std::chrono::milliseconds(100))
+      return;
+    lastDraw = now;
+    const int width = 30;
+    int pct = total ? int(done * 100 / total) : 100;
+    int filled = pct * width / 100;
+    std::cerr << "\r\033[K[" << std::string(size_t(filled), '#')
+              << std::string(size_t(width - filled), '.') << "] " << pct << "%  "
+              << humanSize(done) << " / " << humanSize(total) << std::flush;
+    barVisible = true;
+  };
+
   auto progress = [&](const FileResult &r, size_t done, size_t total) {
+    clearBar();
     std::string counter =
         "[" + std::to_string(done) + "/" + std::to_string(total) + "] ";
     if (r.status == Status::Ok) {
@@ -209,7 +251,8 @@ int main(int argc, char *argv[]) {
     }
   };
 
-  Summary s = process(targets, password, mode, opts, progress, &g_cancel);
+  Summary s = process(targets, password, mode, opts, progress, &g_cancel, bytesFn);
+  clearBar();
   secureClear(password);
 
   std::cerr << "\nResumen: " << s.ok << " correcto(s), " << s.failed
