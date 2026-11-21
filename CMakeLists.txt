@@ -32,7 +32,8 @@ if(CIFRADO_BUILD_GUI)
   find_package(Qt6 COMPONENTS Widgets)
   if(Qt6_FOUND)
     set(CMAKE_AUTOMOC ON)
-    add_executable(cifrado-gui gui/main.cpp gui/mainwindow.cpp gui/mainwindow.hpp)
+    add_executable(cifrado-gui gui/main.cpp gui/mainwindow.cpp gui/mainwindow.hpp
+                               gui/theme.cpp gui/theme.hpp)
     target_link_libraries(cifrado-gui PRIVATE cifrado_core Qt6::Widgets)
     install(TARGETS cifrado-gui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(FILES data/${CIFRADO_APP_ID}.desktop

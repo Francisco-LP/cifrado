@@ -30,7 +30,8 @@ protected:
 private:
   void start(cifrado::Mode mode);
   void setBusy(bool busy);
-  void log(const QString &text, bool error = false);
+  enum class LogKind { Normal, Ok, Warn, Error };
+  void log(const QString &text, LogKind kind = LogKind::Normal);
   void onFileDone(const cifrado::FileResult &r, size_t done, size_t total);
   void onFinished(const cifrado::Summary &s);
   void onBytes(uintmax_t done, uintmax_t total);

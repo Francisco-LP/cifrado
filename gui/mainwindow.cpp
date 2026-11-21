@@ -1,4 +1,5 @@
 #include "mainwindow.hpp"
+#include "theme.hpp"
 
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -54,7 +55,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   auto *root = new QVBoxLayout(central);
 
   auto *hint = new QLabel(tr("Arrastra archivos o carpetas aquí, o usa los botones."));
-  hint->setStyleSheet("color: palette(mid);");
+  hint->setObjectName("hint");
   root->addWidget(hint);
 
   list_ = new QListWidget;
@@ -94,6 +95,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   decrypt_ = new QPushButton(QIcon::fromTheme("security-low"), tr("Descifrar"));
   cancel_ = new QPushButton(QIcon::fromTheme("process-stop"), tr("Cancelar"));
   encrypt_->setDefault(true);
+  encrypt_->setProperty("primary", true);
+  decrypt_->setProperty("primary", true);
   actions->addWidget(encrypt_);
   actions->addWidget(decrypt_);
   actions->addStretch();
@@ -143,7 +146,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   connect(cancel_, &QPushButton::clicked, this, [this] {
     cancelFlag_ = true;
     cancel_->setEnabled(false);
-    log(tr("Cancelando… (se termina el bloque actual sin dejar archivos a medias)"));
+    log(tr("Cancelando… (se termina el bloque actual sin dejar archivos a medias)"),
+        LogKind::Warn);
   });
 
   setBusy(false);
@@ -220,12 +224,16 @@ void MainWindow::setBusy(bool busy) {
   updateButtons();
 }
 
-void MainWindow::log(const QString &text, bool error) {
-  if (error)
-    log_->appendHtml(QStringLiteral("<span style='color:#c0392b'>%1</span>")
-                         .arg(text.toHtmlEscaped()));
-  else
-    log_->appendPlainText(text);
+void MainWindow::log(const QString &text, LogKind kind) {
+  QColor color;
+  switch (kind) {
+  case LogKind::Normal: log_->appendPlainText(text); return;
+  case LogKind::Ok: color = theme::TextOk; break;
+  case LogKind::Warn: color = theme::TextWarn; break;
+  case LogKind::Error: color = theme::TextError; break;
+  }
+  log_->appendHtml(QStringLiteral("<span style='color:%1'>%2</span>")
+                       .arg(color.name(), text.toHtmlEscaped()));
 }
 
 void MainWindow::start(Mode mode) {
@@ -363,22 +371,23 @@ void MainWindow::onFileDone(const FileResult &r, size_t done, size_t total) {
   switch (r.status) {
   case Status::Ok:
     log((mode_ == Mode::Encrypt ? tr("✔ Cifrado: %1") : tr("✔ Descifrado: %1"))
-            .arg(toQ(r.output)));
+            .arg(toQ(r.output)),
+        LogKind::Ok);
     if (!r.detail.empty())
-      log(tr("   Aviso: %1").arg(QString::fromStdString(r.detail)), true);
+      log(tr("   Aviso: %1").arg(QString::fromStdString(r.detail)), LogKind::Warn);
     break;
   case Status::Skipped:
     log(tr("– Omitido: %1 (%2)").arg(toQ(r.source), QString::fromStdString(r.detail)));
     break;
   case Status::Cancelled:
-    log(tr("✖ Cancelado: %1").arg(toQ(r.source)), true);
+    log(tr("✖ Cancelado: %1").arg(toQ(r.source)), LogKind::Warn);
     break;
   default: {
     QString msg = tr("✖ Error: %1: %2")
                       .arg(toQ(r.source), QString::fromStdString(cifrado::statusText(r.status)));
     if (!r.detail.empty())
       msg += " (" + QString::fromStdString(r.detail) + ")";
-    log(msg, true);
+    log(msg, LogKind::Error);
   }
   }
 }
@@ -394,8 +403,10 @@ void MainWindow::onFinished(const Summary &s) {
   if (s.cancelled)
     summary += tr(" — cancelado");
   log(QString());
-  log(tr("Resumen: %1").arg(summary), s.failed > 0);
-  progress_->setFormat(s.cancelled ? tr("Cancelado") : tr("Terminado"));
+  log(tr("Resumen: %1").arg(summary), s.failed > 0 ? LogKind::Error : LogKind::Ok);
+  progress_->setFormat(s.cancelled      ? tr("Cancelado")
+                       : s.failed > 0   ? tr("Terminado con errores")
+                                        : tr("Terminado"));
 
   if (s.failed > 0)
     QMessageBox::warning(this, tr("Terminado con errores"),

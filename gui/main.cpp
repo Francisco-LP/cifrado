@@ -1,4 +1,5 @@
 #include "mainwindow.hpp"
+#include "theme.hpp"
 
 #include <QApplication>
 
@@ -7,6 +8,7 @@ int main(int argc, char *argv[]) {
   QApplication::setApplicationName("cifrado");
   QApplication::setApplicationVersion(cifrado::VERSION);
   QApplication::setDesktopFileName("io.github.Francisco_LP.Cifrado");
+  theme::apply(app);
 
   MainWindow w;
   // Permite abrir rutas desde el gestor de archivos ("Abrir con…").
