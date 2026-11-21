@@ -3,3 +3,6 @@ cifrado
 *.o
 build/
 build-cmake/
+build-rpm/
+build-flatpak/
+.flatpak-builder/

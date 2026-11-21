@@ -46,7 +46,7 @@ void wipe(QLineEdit *e) {
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   setWindowTitle(QStringLiteral("Cifrado %1").arg(cifrado::VERSION));
-  setWindowIcon(QIcon::fromTheme("security-high"));
+  setWindowIcon(QIcon::fromTheme("io.github.Francisco_LP.Cifrado", QIcon::fromTheme("security-high")));
   setAcceptDrops(true);
   resize(640, 620);
 

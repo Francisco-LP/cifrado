@@ -1,0 +1,37 @@
+# Flatpak de la aplicación de escritorio (incluye también la CLI).
+# Ver packaging/flatpak/build-flatpak.sh
+id: io.github.Francisco_LP.Cifrado
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+command: cifrado-gui
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Necesita leer y escribir junto a los archivos que cifra (crea el .enc en
+  # la misma carpeta), por eso no basta con el portal de archivos.
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+
+modules:
+  - name: cifrado
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCIFRADO_BUILD_TESTS=OFF
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - build
+          - build-cmake
+          - build-rpm
+          - build-flatpak
+          - .flatpak-builder
+          - cifrado

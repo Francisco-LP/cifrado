@@ -28,3 +28,12 @@ clean:
 	rm -rf $(BUILD) cifrado
 
 .PHONY: all test clean
+
+# Paquetes (ver packaging/)
+rpm:
+	./packaging/rpm/build-rpm.sh
+
+flatpak:
+	./packaging/flatpak/build-flatpak.sh
+
+.PHONY: rpm flatpak

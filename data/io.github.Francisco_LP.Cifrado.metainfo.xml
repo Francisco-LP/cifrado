@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Francisco_LP.Cifrado</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Cifrado</name>
+  <developer id="io.github.francisco_lp">
+    <name>Francisco Lagos</name>
+  </developer>
+  <url type="homepage">https://github.com/Francisco-LP/cifrado</url>
+  <url type="bugtracker">https://github.com/Francisco-LP/cifrado/issues</url>
+  <summary>Cifra y descifra archivos y carpetas</summary>
+  <description>
+    <p>
+      Cifrado protege archivos y carpetas con una contraseña usando AES-256-GCM
+      y Argon2id. Detecta contraseñas incorrectas y archivos modificados, nunca
+      deja archivos a medias y solo borra los originales cuando el cifrado
+      terminó correctamente.
+    </p>
+    <p>
+      Incluye una aplicación de escritorio con arrastrar y soltar y una
+      herramienta de terminal compatibles entre sí.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.Francisco_LP.Cifrado.desktop</launchable>
+  <provides>
+    <binary>cifrado</binary>
+    <binary>cifrado-gui</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+    <category>Security</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="2.0.0" date="2026-11-21">
+      <description>
+        <p>AES-256-GCM, Argon2id, aplicación de escritorio y progreso por bytes.</p>
+      </description>
+    </release>
+  </releases>
+</component>

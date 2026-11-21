@@ -39,6 +39,31 @@ ctest --test-dir build-cmake
 sudo cmake --install build-cmake   # instala cifrado, cifrado-gui y el acceso en el menú
 ```
 
+## Paquetes
+
+### RPM (Fedora)
+
+```bash
+sudo dnf install rpm-build        # una sola vez
+make rpm                          # o ./packaging/rpm/build-rpm.sh
+sudo dnf install build-rpm/RPMS/x86_64/cifrado-*.rpm
+```
+
+Se generan dos paquetes: `cifrado` (terminal) y `cifrado-gui` (escritorio).
+El RPM se construye desde el último commit.
+
+### Flatpak
+
+```bash
+sudo dnf install flatpak-builder  # una sola vez
+make flatpak                      # o ./packaging/flatpak/build-flatpak.sh
+flatpak run io.github.Francisco_LP.Cifrado
+```
+
+Usa el runtime KDE 6.11 de Flathub (se descarga automáticamente). El Flatpak
+tiene acceso a la carpeta personal y a los discos externos (`/media`,
+`/run/media`, `/mnt`), porque crea el `.enc` junto a cada archivo.
+
 ## Uso (terminal)
 
 ```bash
@@ -64,7 +89,7 @@ Códigos de salida: `0` todo bien, `1` uso incorrecto, `2` hubo errores,
 
 Arrastra archivos o carpetas a la ventana (o usa los botones), escribe la
 contraseña y pulsa **Cifrar** o **Descifrar**. El trabajo se hace en segundo
-plano con barra de progreso y se puede cancelar.
+plano con una barra de progreso por bytes y se puede cancelar.
 
 ## Cómo funciona
 
@@ -76,6 +101,8 @@ plano con barra de progreso y se puede cancelar.
 - **Escritura segura**: el resultado se escribe en un archivo temporal, se hace
   `fsync` y solo entonces se mueve al destino. El original se borra solo si
   todo salió bien. Nunca se sobrescribe un archivo existente sin `--force`.
+- Progreso por bytes en ambas interfaces (en la terminal, solo si la salida es
+  una terminal y no se usa `-q`).
 - Los archivos se procesan por bloques de 64 KiB (sirve para archivos de
   cualquier tamaño) y se crean con permisos `0600`.
 - Los enlaces simbólicos se ignoran para no salir de la carpeta indicada.
@@ -103,6 +130,8 @@ core/   núcleo de cifrado (biblioteca)
 cli/    interfaz de terminal
 gui/    aplicación de escritorio Qt 6
 tests/  tests del núcleo
+data/   .desktop, ícono y metadatos AppStream
+packaging/  spec RPM y manifiesto Flatpak
 ```
 
 ## Licencia

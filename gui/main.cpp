@@ -6,7 +6,7 @@ int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
   QApplication::setApplicationName("cifrado");
   QApplication::setApplicationVersion(cifrado::VERSION);
-  QApplication::setDesktopFileName("cifrado");
+  QApplication::setDesktopFileName("io.github.Francisco_LP.Cifrado");
 
   MainWindow w;
   // Permite abrir rutas desde el gestor de archivos ("Abrir con…").
